@@ -151,8 +151,6 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _nameRow(BuildContext context, GalleryThemeDef th, int slot,
       String title, String subtitle) {
-    final controller =
-        TextEditingController(text: settings.playerName(slot));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -173,35 +171,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          SizedBox(
-            width: 150,
-            child: TextField(
-              controller: controller,
-              maxLength: 16,
-              textAlign: TextAlign.right,
-              style: th.body.copyWith(color: th.ink, fontSize: 14),
-              decoration: InputDecoration(
-                counterText: '',
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  borderSide: BorderSide(color: th.line),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  borderSide:
-                      BorderSide(color: th.accent, width: 1.5),
-                ),
-              ),
-              onSubmitted: (v) {
-                settings.setPlayerName(slot, v);
-                AudioService.I.click();
-                FocusScope.of(context).unfocus();
-              },
-            ),
-          ),
+          _NameField(settings: settings, th: th, slot: slot),
         ],
       ),
     );
@@ -858,6 +828,89 @@ class _CatalogScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Rename field that saves on every keystroke AND commits when the field
+/// loses focus, so a rename is never lost if the user taps away without
+/// hitting keyboard-done. Stateful so its controller/focus node survive the
+/// parent screen's rebuilds (typed text is not reset on notify).
+class _NameField extends StatefulWidget {
+  final AppSettings settings;
+  final GalleryThemeDef th;
+  final int slot;
+
+  const _NameField(
+      {required this.settings, required this.th, required this.slot});
+
+  @override
+  State<_NameField> createState() => _NameFieldState();
+}
+
+class _NameFieldState extends State<_NameField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  String _lastCommitted = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _lastCommitted = widget.settings.playerName(widget.slot);
+    _controller = TextEditingController(text: _lastCommitted);
+    _focusNode = FocusNode()..addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) _commit(_controller.text);
+  }
+
+  void _commit(String v) {
+    if (v == _lastCommitted) return;
+    _lastCommitted = v;
+    widget.settings.setPlayerName(widget.slot, v);
+    AudioService.I.click();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final th = widget.th;
+    return SizedBox(
+      width: 150,
+      child: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        maxLength: 16,
+        textAlign: TextAlign.right,
+        style: th.body.copyWith(color: th.ink, fontSize: 14),
+        decoration: InputDecoration(
+          counterText: '',
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(color: th.line),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(color: th.accent, width: 1.5),
+          ),
+        ),
+        onChanged: _commit,
+        onSubmitted: (v) {
+          _commit(v);
+          FocusScope.of(context).unfocus();
+        },
       ),
     );
   }
