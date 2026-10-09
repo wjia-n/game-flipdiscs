@@ -1,18 +1,32 @@
-/// The matte-black exhibition board: lacquered slab, hairline etched
-/// grid, brass micro-ring hints on legal squares, coordinate labels.
+/// The exhibition board: lacquered slab, hairline etched grid, accent
+/// micro-ring hints on legal squares, coordinate labels.
+///
+/// Colors come from the active [GalleryThemeDef] + [BoardAccentDef]; discs
+/// render in the active [DiscStyleDef].
 
 library;
 import 'package:flutter/material.dart';
 
 import '../game/controller.dart';
 import '../game/engine.dart';
+import '../theme/gallery.dart';
 import 'disc.dart';
 import 'tokens.dart';
 import 'widgets.dart';
 
 class BoardView extends StatelessWidget {
   final GameController controller;
-  const BoardView({super.key, required this.controller});
+  final GalleryThemeDef theme;
+  final BoardAccentDef accent;
+  final DiscStyleDef discStyle;
+
+  const BoardView({
+    super.key,
+    required this.controller,
+    required this.theme,
+    required this.accent,
+    required this.discStyle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +39,7 @@ class BoardView extends StatelessWidget {
           width: side,
           height: side,
           child: CustomPaint(
-            painter: _BoardPainter(pad: pad),
+            painter: _BoardPainter(pad: pad, theme: theme, accent: accent),
             child: Padding(
               padding: EdgeInsets.all(pad),
               child: GridView.builder(
@@ -36,6 +50,9 @@ class BoardView extends StatelessWidget {
                 itemCount: 64,
                 itemBuilder: (_, i) => _Cell(
                   controller: controller,
+                  theme: theme,
+                  accent: accent,
+                  discStyle: discStyle,
                   index: i,
                   cellSize: cell,
                 ),
@@ -50,11 +67,17 @@ class BoardView extends StatelessWidget {
 
 class _Cell extends StatelessWidget {
   final GameController controller;
+  final GalleryThemeDef theme;
+  final BoardAccentDef accent;
+  final DiscStyleDef discStyle;
   final int index;
   final double cellSize;
 
   const _Cell(
       {required this.controller,
+      required this.theme,
+      required this.accent,
+      required this.discStyle,
       required this.index,
       required this.cellSize});
 
@@ -72,16 +95,21 @@ class _Cell extends StatelessWidget {
       final flipped = controller.lastFlips.contains(index);
       if (justPlaced && !flipped) {
         disc = PlacingDisc(
-            key: ValueKey('p${controller.flipEpoch}'), side: v, size: discSize);
+            key: ValueKey('p${controller.flipEpoch}'),
+            side: v,
+            style: discStyle,
+            size: discSize);
       } else if (flipped) {
         disc = FlippingDisc(
           key: ValueKey('f$index'),
           side: v,
+          style: discStyle,
           flipNonce: controller.flipEpoch,
+          startDelay: controller.flipDelayFor(index),
           size: discSize,
         );
       } else {
-        disc = Disc(side: v, size: discSize);
+        disc = Disc(side: v, style: discStyle, size: discSize);
       }
     }
 
@@ -97,7 +125,8 @@ class _Cell extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: G.brass.withValues(alpha: 0.40),
+                        color:
+                            accent.hint.withValues(alpha: 0.40),
                         width: 1,
                       ),
                     ),
@@ -119,7 +148,11 @@ class _Cell extends StatelessWidget {
 
 class _BoardPainter extends CustomPainter {
   final double pad;
-  const _BoardPainter({required this.pad});
+  final GalleryThemeDef theme;
+  final BoardAccentDef accent;
+
+  const _BoardPainter(
+      {required this.pad, required this.theme, required this.accent});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -132,13 +165,13 @@ class _BoardPainter extends CustomPainter {
       Paint()..color = Colors.black.withValues(alpha: 0.25),
     );
 
-    // Matte black lacquered slab.
+    // Matte lacquered slab in the theme's board tone.
     final slab = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFF1B1A18), G.board, Color(0xFF100F0E)],
-        stops: [0.0, 0.5, 1.0],
+        colors: [theme.boardHi, theme.board, theme.boardLo],
+        stops: const [0.0, 0.5, 1.0],
       ).createShader(rect);
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(G.rBoard)),
@@ -156,12 +189,23 @@ class _BoardPainter extends CustomPainter {
         ..color = Colors.white.withValues(alpha: 0.10),
     );
 
+    // Accent inlay frame around the play area.
+    final inner =
+        Rect.fromLTWH(pad, pad, size.width - pad * 2, size.height - pad * 2);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+          inner.inflate(3), const Radius.circular(10)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = accent.frame.withValues(alpha: 0.55),
+    );
+
     // Hairline etched grid.
     final gridPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = G.boardGrid;
-    final inner = Rect.fromLTWH(pad, pad, size.width - pad * 2, size.height - pad * 2);
+      ..color = theme.boardGrid;
     final cell = inner.width / 8;
     for (var i = 0; i <= 8; i++) {
       final o = inner.left + i * cell;
@@ -195,7 +239,7 @@ class _BoardPainter extends CustomPainter {
           fontSize: 9,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.5,
-          color: G.basalt.withValues(alpha: 0.75),
+          color: theme.muted.withValues(alpha: 0.75),
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -205,5 +249,6 @@ class _BoardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BoardPainter old) => old.pad != pad;
+  bool shouldRepaint(covariant _BoardPainter old) =>
+      old.pad != pad || old.theme != theme || old.accent != accent;
 }

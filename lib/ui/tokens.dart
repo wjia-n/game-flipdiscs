@@ -2,16 +2,24 @@
 /// (see stitch-batch2/flipdiscs/DESIGN.md), expressed in Flutter.
 ///
 /// Art direction: gallery-minimalist still life. Frosted glass discs on a
-/// matte black board, warm-gray museum-wall backdrop, single brass accent
-/// (never luminescent). Newsreader light serif for display, Manrope for UI.
+/// matte board, warm-gray museum-wall backdrop, a single restrained metal
+/// accent (never luminous). Newsreader light serif for display, Manrope
+/// for UI.
+///
+/// The active gallery theme is provided down the tree by [GalleryScope];
+/// widgets read it with `GalleryScope.themeOf(context)` and style text
+/// with the [GalleryText] extension. The static [G] class keeps the
+/// default (plaster) tokens plus radii, shadows and font families.
 
 library;
 import 'package:flutter/material.dart';
 
+import '../theme/gallery.dart';
+
 class G {
   G._();
 
-  // --- palette ---
+  // --- palette (default "Gallery Plaster" theme) ---
   static const plaster = Color(0xFFE8E6E1); // app backdrop
   static const surface = Color(0xFFFBF9F4); // frosted card surfaces
   static const ink = Color(0xFF1C1B19); // primary text / dark disc side
@@ -50,97 +58,13 @@ class G {
       ];
 
   // --- typography ---
-  static const _serif = 'Newsreader';
-  static const _sans = 'Manrope';
-
-  /// Display headline: light serif, uppercase, wide tracking.
-  static TextStyle get display => const TextStyle(
-        fontFamily: _serif,
-        fontWeight: FontWeight.w300,
-        fontSize: 40,
-        letterSpacing: 3.2, // 0.08em
-        color: ink,
-        height: 1.1,
-      );
-
-  static TextStyle get headline => const TextStyle(
-        fontFamily: _serif,
-        fontWeight: FontWeight.w300,
-        fontSize: 30,
-        letterSpacing: 1.8, // 0.06em
-        color: ink,
-        height: 1.15,
-      );
-
-  static TextStyle get titleCaps => const TextStyle(
-        fontFamily: _serif,
-        fontWeight: FontWeight.w400,
-        fontSize: 17,
-        letterSpacing: 3.4, // 0.20em
-        color: ink,
-      );
-
-  /// Micro captions: letterspaced caps.
-  static TextStyle labelCaps({double size = 11, Color color = basalt}) =>
-      TextStyle(
-        fontFamily: _sans,
-        fontWeight: FontWeight.w600,
-        fontSize: size,
-        letterSpacing: size * 0.16,
-        color: color,
-      );
-
-  static TextStyle get body => const TextStyle(
-        fontFamily: _sans,
-        fontWeight: FontWeight.w400,
-        fontSize: 14,
-        color: onSurfaceVariant,
-        height: 1.55,
-      );
-
-  static TextStyle get buttonLabel => const TextStyle(
-        fontFamily: _sans,
-        fontWeight: FontWeight.w500,
-        fontSize: 13,
-        letterSpacing: 0.4,
-        color: ink,
-      );
-
-  static TextStyle get darkButtonLabel => const TextStyle(
-        fontFamily: _sans,
-        fontWeight: FontWeight.w500,
-        fontSize: 13,
-        letterSpacing: 0.4,
-        color: Color(0xFFE8E6E1),
-      );
-
-  /// Italic serif for quiet editorial captions.
-  static TextStyle get italicCaption => const TextStyle(
-        fontFamily: _serif,
-        fontStyle: FontStyle.italic,
-        fontWeight: FontWeight.w400,
-        fontSize: 15,
-        color: onSurfaceVariant,
-        height: 1.4,
-      );
-
-  /// Tabular lining figures so score strips never jitter.
-  static TextStyle numerals(
-          {double size = 15,
-          FontWeight weight = FontWeight.w600,
-          Color color = ink}) =>
-      TextStyle(
-        fontFamily: _sans,
-        fontWeight: weight,
-        fontSize: size,
-        color: color,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
+  static const serif = 'Newsreader';
+  static const sans = 'Manrope';
 
   static ThemeData get theme => ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: plaster,
-        fontFamily: _sans,
+        fontFamily: sans,
         colorScheme: const ColorScheme.light(
           primary: ink,
           onPrimary: plaster,
@@ -155,21 +79,143 @@ class G {
       );
 }
 
-/// Photographic backdrop: warm-gray plaster with a soft studio vignette
-/// (the only gradient allowed — photographic, per DESIGN.md).
+/// Provides the active [GalleryThemeDef] down the widget tree.
+class GalleryScope extends InheritedWidget {
+  final GalleryThemeDef theme;
+
+  const GalleryScope({super.key, required this.theme, required super.child});
+
+  static GalleryThemeDef themeOf(BuildContext context) {
+    final scope =
+        context.dependOnInheritedWidgetOfExactType<GalleryScope>();
+    return scope?.theme ?? GalleryThemes.all.first;
+  }
+
+  @override
+  bool updateShouldNotify(GalleryScope old) => old.theme != theme;
+}
+
+/// Typography bound to a theme's colors: hierarchy by size + tracking +
+/// weight only — no color-coding, no bold-everything.
+extension GalleryText on GalleryThemeDef {
+  TextStyle get display => TextStyle(
+        fontFamily: G.serif,
+        fontWeight: FontWeight.w300,
+        fontSize: 40,
+        letterSpacing: 3.2,
+        color: ink,
+        height: 1.1,
+      );
+
+  TextStyle get headline => TextStyle(
+        fontFamily: G.serif,
+        fontWeight: FontWeight.w300,
+        fontSize: 30,
+        letterSpacing: 1.8,
+        color: ink,
+        height: 1.15,
+      );
+
+  TextStyle get titleCaps => TextStyle(
+        fontFamily: G.serif,
+        fontWeight: FontWeight.w400,
+        fontSize: 17,
+        letterSpacing: 3.4,
+        color: ink,
+      );
+
+  TextStyle labelCaps({double size = 11, Color? color}) => TextStyle(
+        fontFamily: G.sans,
+        fontWeight: FontWeight.w600,
+        fontSize: size,
+        letterSpacing: size * 0.16,
+        color: color ?? muted,
+      );
+
+  TextStyle get body => TextStyle(
+        fontFamily: G.sans,
+        fontWeight: FontWeight.w400,
+        fontSize: 14,
+        color: sub,
+        height: 1.55,
+      );
+
+  TextStyle get buttonLabel => TextStyle(
+        fontFamily: G.sans,
+        fontWeight: FontWeight.w500,
+        fontSize: 13,
+        letterSpacing: 0.4,
+        color: ink,
+      );
+
+  TextStyle get darkButtonLabel => TextStyle(
+        fontFamily: G.sans,
+        fontWeight: FontWeight.w500,
+        fontSize: 13,
+        letterSpacing: 0.4,
+        color: bg,
+      );
+
+  TextStyle get italicCaption => TextStyle(
+        fontFamily: G.serif,
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 15,
+        color: sub,
+        height: 1.4,
+      );
+
+  TextStyle numerals(
+          {double size = 15,
+          FontWeight weight = FontWeight.w600,
+          Color? color}) =>
+      TextStyle(
+        fontFamily: G.sans,
+        fontWeight: weight,
+        fontSize: size,
+        color: color ?? ink,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  /// Frosted-glass fill that reads on this theme's backdrop.
+  Color get glassFill {
+    final hsl = HSLColor.fromColor(bg);
+    final light = hsl.lightness > 0.5;
+    return (light ? Colors.white : surface)
+        .withValues(alpha: light ? 0.65 : 0.16);
+  }
+
+  /// Card fill for dark vs light themes.
+  Color get cardFill {
+    final hsl = HSLColor.fromColor(bg);
+    return hsl.lightness > 0.5
+        ? Colors.white.withValues(alpha: 0.55)
+        : surface.withValues(alpha: 0.10);
+  }
+}
+
+/// Photographic backdrop: gallery wall with a soft studio vignette (the
+/// only gradient allowed — photographic, per DESIGN.md).
 class GalleryBackdrop extends StatelessWidget {
   final Widget child;
-  const GalleryBackdrop({super.key, required this.child});
+  final GalleryThemeDef? theme;
+
+  const GalleryBackdrop({super.key, required this.child, this.theme});
 
   @override
   Widget build(BuildContext context) {
+    final t = theme ?? GalleryScope.themeOf(context);
+    final hsl = HSLColor.fromColor(t.bg);
+    final light = hsl.lightness > 0.5;
+    final hi = hsl.withLightness((hsl.lightness + 0.05).clamp(0.0, 1.0)).toColor();
+    final lo = hsl.withLightness((hsl.lightness - 0.06).clamp(0.0, 1.0)).toColor();
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: RadialGradient(
-          center: Alignment(-0.35, -0.55), // soft key from upper-left
+          center: const Alignment(-0.35, -0.55), // soft key from upper-left
           radius: 1.35,
-          colors: [Color(0xFFF1EEE8), G.plaster, Color(0xFFDDD9D1)],
-          stops: [0.0, 0.55, 1.0],
+          colors: light ? [hi, t.bg, lo] : [hi, t.bg, lo],
+          stops: const [0.0, 0.55, 1.0],
         ),
       ),
       child: child,

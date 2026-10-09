@@ -1,5 +1,6 @@
 /// Shared gallery widgets: frosted glass cards/buttons, physical
 /// toggles/sliders, pills, top bar — all per the Stitch design system.
+/// Every widget reads the active theme from [GalleryScope].
 
 library;
 import 'dart:math';
@@ -27,6 +28,7 @@ class FrostedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     final card = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
@@ -34,9 +36,9 @@ class FrostedCard extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: G.glassWhite,
+            color: t.glassFill,
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: G.outlineVariant, width: 1),
+            border: Border.all(color: t.line, width: 1),
             boxShadow: G.cardShadow,
           ),
           child: child,
@@ -53,16 +55,19 @@ class GlassButton extends StatelessWidget {
   final String label;
   final String sublabel;
   final VoidCallback onTap;
+  final IconData? icon;
 
   const GlassButton({
     super.key,
     required this.label,
     required this.sublabel,
     required this.onTap,
+    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return FrostedCard(
       onTap: onTap,
       radius: G.rPill,
@@ -72,9 +77,9 @@ class GlassButton extends StatelessWidget {
           Container(
             width: 10,
             height: 10,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: G.ink,
+              color: icon == null ? t.ink : t.accent,
             ),
           ),
           const SizedBox(width: 14),
@@ -83,22 +88,26 @@ class GlassButton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: G.buttonLabel.copyWith(fontSize: 15)),
+                    style: t.buttonLabel.copyWith(fontSize: 15)),
                 const SizedBox(height: 2),
                 Text(sublabel,
-                    style: G.body.copyWith(
-                        fontSize: 12, color: G.basalt, height: 1.3)),
+                    style: t.body.copyWith(
+                        fontSize: 12, color: t.muted, height: 1.3)),
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_rounded, color: G.ink, size: 20),
+          if (icon != null) ...[
+            Icon(icon, color: t.ink, size: 20),
+            const SizedBox(width: 4),
+          ],
+          Icon(Icons.arrow_forward_rounded, color: t.ink, size: 20),
         ],
       ),
     );
   }
 }
 
-/// Primary action: solid matte charcoal pill with warm-gray text.
+/// Primary action: solid matte pill with contrasting text.
 class DarkButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -109,12 +118,13 @@ class DarkButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
         decoration: BoxDecoration(
-          color: G.ink,
+          color: t.ink,
           borderRadius: BorderRadius.circular(G.rPill),
           boxShadow: G.buttonShadow,
         ),
@@ -123,11 +133,11 @@ class DarkButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, color: G.plaster, size: 18),
+              Icon(icon, color: t.bg, size: 18),
               const SizedBox(width: 10),
             ],
             Text(label.toUpperCase(),
-                style: G.darkButtonLabel
+                style: t.darkButtonLabel
                     .copyWith(letterSpacing: 1.6, fontSize: 13)),
           ],
         ),
@@ -145,13 +155,14 @@ class GhostButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return FrostedCard(
       onTap: onTap,
       radius: G.rPill,
       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
       child: Center(
         child: Text(label.toUpperCase(),
-            style: G.buttonLabel.copyWith(letterSpacing: 1.6, fontSize: 13)),
+            style: t.buttonLabel.copyWith(letterSpacing: 1.6, fontSize: 13)),
       ),
     );
   }
@@ -168,6 +179,7 @@ class MiniPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return FrostedCard(
       onTap: onTap,
       radius: G.rPill,
@@ -177,10 +189,10 @@ class MiniPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: G.ink),
+            Icon(icon, size: 16, color: t.ink),
             const SizedBox(width: 8),
             Text(label.toUpperCase(),
-                style: G.buttonLabel
+                style: t.buttonLabel
                     .copyWith(fontSize: 12, letterSpacing: 1.4)),
           ],
         ),
@@ -199,6 +211,9 @@ class PhysicalToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
+    final hsl = HSLColor.fromColor(t.bg);
+    final light = hsl.lightness > 0.5;
     return GestureDetector(
       onTap: () => onChanged(!value),
       child: AnimatedContainer(
@@ -209,9 +224,9 @@ class PhysicalToggle extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           color: value
-              ? G.ink.withValues(alpha: 0.92)
-              : Colors.white.withValues(alpha: 0.55),
-          border: Border.all(color: G.outlineVariant, width: 1),
+              ? t.ink.withValues(alpha: 0.92)
+              : t.cardFill,
+          border: Border.all(color: t.line, width: 1),
           boxShadow: const [
             BoxShadow(
                 color: Color(0x14000000),
@@ -237,7 +252,12 @@ class PhysicalToggle extends StatelessWidget {
                     end: Alignment.bottomRight,
                     colors: value
                         ? [G.porcelainTop, G.porcelainBottom]
-                        : [const Color(0xFF3A3835), G.ink],
+                        : [
+                            light
+                                ? const Color(0xFF3A3835)
+                                : const Color(0xFF8A857A),
+                            light ? t.ink : t.bg
+                          ],
                   ),
                   boxShadow: const [
                     BoxShadow(
@@ -270,12 +290,13 @@ class GallerySlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: 2,
-        activeTrackColor: G.ink,
-        inactiveTrackColor: G.basalt.withValues(alpha: 0.35),
-        thumbShape: const _DiscThumb(),
+        activeTrackColor: t.ink,
+        inactiveTrackColor: t.muted.withValues(alpha: 0.35),
+        thumbShape: _DiscThumb(ink: t.ink),
         overlayShape: SliderComponentShape.noOverlay,
       ),
       child: Slider(
@@ -285,7 +306,8 @@ class GallerySlider extends StatelessWidget {
 }
 
 class _DiscThumb extends SliderComponentShape {
-  const _DiscThumb();
+  final Color ink;
+  const _DiscThumb({required this.ink});
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
       const Size(22, 22);
@@ -311,10 +333,10 @@ class _DiscThumb extends SliderComponentShape {
         center,
         10,
         Paint()
-          ..shader = const LinearGradient(
+          ..shader = LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF3A3835), G.ink],
+            colors: [Color.lerp(ink, Colors.white, 0.25)!, ink],
           ).createShader(Rect.fromCircle(center: center, radius: 10)));
     canvas.drawCircle(
         center + const Offset(-2.5, -2.5),
@@ -324,50 +346,69 @@ class _DiscThumb extends SliderComponentShape {
 }
 
 /// Difficulty pills (Easy / Medium / Hard) — selected is matte charcoal.
+/// Hard shows a lock when the player is not Pro.
 class DifficultyPills extends StatelessWidget {
   final int selected; // 0,1,2
   final ValueChanged<int> onChanged;
   final List<String> labels;
+  final bool hardLocked;
 
   const DifficultyPills({
     super.key,
     required this.selected,
     required this.onChanged,
     this.labels = const ['Easy', 'Medium', 'Hard'],
+    this.hardLocked = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.5),
+        color: t.cardFill,
         borderRadius: BorderRadius.circular(G.rPill),
-        border: Border.all(color: G.outlineVariant, width: 1),
+        border: Border.all(color: t.line, width: 1),
       ),
       child: Row(
         children: List.generate(labels.length, (i) {
           final active = i == selected;
+          final locked = hardLocked && i == 2;
           return Expanded(
             child: GestureDetector(
-              onTap: () => onChanged(i),
+              onTap: locked ? null : () => onChanged(i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding:
                     const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: active ? G.ink : Colors.transparent,
+                  color: active ? t.ink : Colors.transparent,
                   borderRadius: BorderRadius.circular(G.rPill),
                   boxShadow: active ? G.buttonShadow : null,
                 ),
                 child: Center(
-                  child: Text(
-                    labels[i],
-                    style: G.buttonLabel.copyWith(
-                      fontSize: 12,
-                      letterSpacing: 0.6,
-                      color: active ? G.plaster : G.onSurfaceVariant,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (locked) ...[
+                        Icon(Icons.lock_outline_rounded,
+                            size: 12, color: t.muted),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        labels[i],
+                        style: t.buttonLabel.copyWith(
+                          fontSize: 12,
+                          letterSpacing: 0.6,
+                          color: active
+                              ? t.bg
+                              : locked
+                                  ? t.muted.withValues(alpha: 0.6)
+                                  : t.sub,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -396,6 +437,7 @@ class GalleryTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return Row(
       children: [
         SizedBox(
@@ -410,10 +452,10 @@ class GalleryTopBar extends StatelessWidget {
         Expanded(
           child: Column(
             children: [
-              Text(title, style: G.titleCaps),
+              Text(title, style: t.titleCaps),
               const SizedBox(height: 3),
               Text(subtitle,
-                  style: G.labelCaps(size: 10, color: G.basalt)),
+                  style: t.labelCaps(size: 10)),
             ],
           ),
         ),
@@ -456,6 +498,7 @@ class _CircleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return GestureDetector(
       onTap: onTap,
       child: Opacity(
@@ -465,8 +508,8 @@ class _CircleIcon extends StatelessWidget {
           height: 40,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: G.glassWhite,
-            border: Border.all(color: G.outlineVariant, width: 1),
+            color: t.glassFill,
+            border: Border.all(color: t.line, width: 1),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x14000000),
@@ -474,7 +517,7 @@ class _CircleIcon extends StatelessWidget {
                   offset: Offset(0, 4)),
             ],
           ),
-          child: Icon(icon, size: 20, color: G.ink),
+          child: Icon(icon, size: 20, color: t.ink),
         ),
       ),
     );
@@ -487,11 +530,14 @@ class MicroCaption extends StatelessWidget {
   const MicroCaption(this.text, {super.key});
 
   @override
-  Widget build(BuildContext context) => Text(
-        text.toUpperCase(),
-        textAlign: TextAlign.center,
-        style: G.labelCaps(size: 10, color: G.basalt),
-      );
+  Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
+    return Text(
+      text.toUpperCase(),
+      textAlign: TextAlign.center,
+      style: t.labelCaps(size: 10),
+    );
+  }
 }
 
 /// Gentle shake for invalid moves (gallery calm: no red flashes).
@@ -547,5 +593,15 @@ class _ShakeState extends State<Shake>
     if (t == 0 || t == 1) return 0;
     // Damped oscillation: ±5px, ~3 visible swings.
     return 5.0 * (1 - t) * (1 - t) * sin(t * pi * 6);
+  }
+}
+
+/// Hairline divider row helper.
+class Hairline extends StatelessWidget {
+  const Hairline({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
+    return Container(height: 1, color: t.line.withValues(alpha: 0.6));
   }
 }

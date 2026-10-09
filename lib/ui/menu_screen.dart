@@ -1,7 +1,7 @@
-/// Main menu — "Flip Discs · Curated Edition".
+/// Main menu — "Flip Discs · Gallery Edition".
 ///
-/// Title top → photographic still-life hero → Play vs Bot / 2 Players
-/// glass buttons → depth-level pills → micro-caption → bottom tab bar
+/// Title top → logo hero → Play vs Bot / 2 Players / Watch demo glass
+/// buttons → depth-level pills → micro-caption → bottom tab bar
 /// (Play / Archive / Rules).
 
 library;
@@ -10,16 +10,20 @@ import 'package:flutter/material.dart';
 import '../game/ai.dart';
 import '../game/controller.dart';
 import '../services/audio.dart';
+import '../services/iap_service.dart';
 import '../services/settings.dart';
-import 'disc.dart';
+import '../theme/gallery.dart';
 import 'game_screen.dart';
+import 'pro_screen.dart';
 import 'settings_screen.dart';
 import 'tokens.dart';
 import 'widgets.dart';
 
 class MenuScreen extends StatefulWidget {
   final AppSettings settings;
-  const MenuScreen({super.key, required this.settings});
+  final StoreService store;
+  const MenuScreen(
+      {super.key, required this.settings, required this.store});
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
@@ -27,6 +31,8 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   int _tab = 0; // 0 play, 1 archive, 2 rules
+
+  GalleryThemeDef get _t => widget.settings.gallery;
 
   @override
   void initState() {
@@ -38,13 +44,25 @@ class _MenuScreenState extends State<MenuScreen> {
     AudioService.I.click();
     AudioService.I.tapHaptic();
     Navigator.of(context)
-        .push(_route(GameScreen(settings: widget.settings, mode: mode)))
+        .push(_route(GameScreen(
+            settings: widget.settings,
+            mode: mode,
+            store: widget.store)))
         .then((_) => AudioService.I.menuMusic());
   }
 
   void _openSettings() {
     AudioService.I.click();
-    Navigator.of(context).push(_route(SettingsScreen(settings: widget.settings)));
+    Navigator.of(context).push(_route(SettingsScreen(
+        settings: widget.settings, store: widget.store)));
+  }
+
+  void _openPro() {
+    AudioService.I.click();
+    Navigator.of(context).push(_route(ProScreen(
+      settings: widget.settings,
+      store: widget.store,
+    )));
   }
 
   static PageRouteBuilder _route(Widget page) => PageRouteBuilder(
@@ -56,39 +74,53 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GalleryBackdrop(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: GalleryTopBar(
-                  title: 'FLIP DISCS',
-                  subtitle: 'CURATED EDITION · REVERSI',
-                  onBack: null,
-                  actions: [
-                    CircleIconButton(
-                      icon: Icons.settings_outlined,
-                      onTap: _openSettings,
+    final t = _t;
+    return GalleryScope(
+      theme: t,
+      child: GalleryBackdrop(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: GalleryTopBar(
+                    title: 'FLIP DISCS',
+                    subtitle: 'GALLERY EDITION · REVERSI',
+                    onBack: null,
+                    actions: [
+                      if (!widget.settings.isPro)
+                        CircleIconButton(
+                          icon: Icons.workspace_premium_outlined,
+                          onTap: _openPro,
+                        ),
+                      if (!widget.settings.isPro)
+                        const SizedBox(width: 8),
+                      CircleIconButton(
+                        icon: Icons.settings_outlined,
+                        onTap: _openSettings,
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListenableBuilder(
+                    listenable: widget.settings,
+                    builder: (_, _) => IndexedStack(
+                      index: _tab,
+                      children: [
+                        _playTab(),
+                        _archiveTab(),
+                        _rulesTab(),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: IndexedStack(
-                  index: _tab,
-                  children: [
-                    _playTab(),
-                    _archiveTab(),
-                    _rulesTab(),
-                  ],
-                ),
-              ),
-              _bottomNav(),
-            ],
+                _bottomNav(),
+              ],
+            ),
           ),
         ),
       ),
@@ -97,10 +129,11 @@ class _MenuScreenState extends State<MenuScreen> {
 
   // ------------------------------------------------------------- play tab
   Widget _playTab() {
+    final t = _t;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
       children: [
-        _heroStillLife(),
+        _logoHero(),
         const SizedBox(height: 18),
         GlassButton(
           label: 'Play vs Bot',
@@ -113,64 +146,73 @@ class _MenuScreenState extends State<MenuScreen> {
           sublabel: 'Shared local display',
           onTap: () => _openGame(GameMode.twoPlayer),
         ),
+        const SizedBox(height: 12),
+        GlassButton(
+          label: 'Watch demo',
+          sublabel: 'Two bots, zero pressure',
+          icon: Icons.play_circle_outline_rounded,
+          onTap: () => _openGame(GameMode.demo),
+        ),
         const SizedBox(height: 20),
         Center(
           child: Text('DEPTH LEVEL',
-              style: G.labelCaps(size: 10, color: G.basalt)),
+              style: t.labelCaps(size: 10)),
         ),
         const SizedBox(height: 10),
         ListenableBuilder(
           listenable: widget.settings,
           builder: (_, _) => DifficultyPills(
             selected: widget.settings.difficulty.index,
+            hardLocked: !widget.settings.isPro,
             onChanged: (i) {
+              if (i == 2 && !widget.settings.isPro) {
+                AudioService.I.click();
+                _openPro();
+                return;
+              }
               AudioService.I.click();
               widget.settings
                   .setDifficulty(BotDifficulty.values[i]);
             },
           ),
         ),
+        if (!widget.settings.isPro) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: GestureDetector(
+              onTap: _openPro,
+              child: Text(
+                'HARD MODE IS A PRO FEATURE',
+                style: t.labelCaps(
+                    size: 10, color: t.accent),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         const MicroCaption('A game of outflanking · 8 × 8'),
       ],
     );
   }
 
-  /// Frosted glass card holding a small physical still life: a matte
-  /// board corner with frosted discs, "PLATE NO. 01".
-  Widget _heroStillLife() {
+  /// Logo hero: the game logo in a brass-ringed frame.
+  Widget _logoHero() {
+    final t = _t;
     return FrostedCard(
       padding: const EdgeInsets.all(18),
       child: Column(
         children: [
-          AspectRatio(
-            aspectRatio: 16 / 10,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF201F1D),
-                    Color(0xFF141312),
-                    Color(0xFF0F0E0D)
-                  ],
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                      color: Color(0x30000000),
-                      blurRadius: 16,
-                      offset: Offset(0, 8)),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CustomPaint(
-                  painter: _StillLifePainter(),
-                ),
-              ),
+          Container(
+            width: 148,
+            height: 148,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: t.accent, width: 2),
+              boxShadow: G.cardShadow,
             ),
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset('assets/flipdiscs_logo.png',
+                fit: BoxFit.cover),
           ),
           const SizedBox(height: 12),
           Row(
@@ -180,13 +222,12 @@ class _MenuScreenState extends State<MenuScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: t.cardFill,
                   borderRadius: BorderRadius.circular(999),
-                  border:
-                      Border.all(color: G.outlineVariant, width: 1),
+                  border: Border.all(color: t.line, width: 1),
                 ),
                 child: Text('PLATE NO. 01',
-                    style: G.labelCaps(size: 9, color: G.onSurfaceVariant)),
+                    style: t.labelCaps(size: 9)),
               ),
             ],
           ),
@@ -197,15 +238,18 @@ class _MenuScreenState extends State<MenuScreen> {
 
   // ---------------------------------------------------------- archive tab
   Widget _archiveTab() {
+    final t = _t;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
       children: [
         Center(
           child: Text('PERSONAL ANTHOLOGY',
-              style: G.labelCaps(size: 10, color: G.basalt)),
+              style: t.labelCaps(size: 10)),
         ),
         const SizedBox(height: 4),
-        Center(child: Text('Every exhibition, remembered.', style: G.italicCaption)),
+        Center(
+            child: Text('Every exhibition, remembered.',
+                style: t.italicCaption)),
         const SizedBox(height: 16),
         ListenableBuilder(
           listenable: widget.settings,
@@ -215,17 +259,17 @@ class _MenuScreenState extends State<MenuScreen> {
               child: Column(
                 children: [
                   _statRow('EXHIBITIONS PLAYED', '${s.gamesPlayed}'),
-                  const _Hairline(),
+                  const Hairline(),
                   _statRow('VS BOT — WON', '${s.botWins}'),
-                  const _Hairline(),
+                  const Hairline(),
                   _statRow('VS BOT — LOST', '${s.botLosses}'),
-                  const _Hairline(),
+                  const Hairline(),
                   _statRow('VS BOT — DRAWN', '${s.botDraws}'),
-                  const _Hairline(),
+                  const Hairline(),
                   _statRow('2 PLAYERS — BLACK', '${s.p2BlackWins}'),
-                  const _Hairline(),
+                  const Hairline(),
                   _statRow('2 PLAYERS — WHITE', '${s.p2WhiteWins}'),
-                  const _Hairline(),
+                  const Hairline(),
                   _statRow('2 PLAYERS — DRAWN', '${s.p2Draws}'),
                 ],
               ),
@@ -238,34 +282,36 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
-  Widget _statRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Expanded(
-                child: Text(label,
-                    style: G.labelCaps(
-                        size: 11, color: G.onSurfaceVariant))),
-            Text(value, style: G.numerals(size: 17)),
-          ],
-        ),
-      );
+  Widget _statRow(String label, String value) {
+    final t = _t;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+              child: Text(label,
+                  style: t.labelCaps(size: 11))),
+          Text(value, style: t.numerals(size: 17)),
+        ],
+      ),
+    );
+  }
 
   // ------------------------------------------------------------ rules tab
   Widget _rulesTab() {
+    final t = _t;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
       children: [
         Center(
-          child:
-              Text('RULES', style: G.labelCaps(size: 10, color: G.basalt)),
+          child: Text('RULES', style: t.labelCaps(size: 10)),
         ),
         const SizedBox(height: 4),
         Center(
-            child:
-                Text('The art of the outflank.', style: G.italicCaption)),
+            child: Text('The art of the outflank.',
+                style: t.italicCaption)),
         const SizedBox(height: 16),
-        const FrostedCard(
+        FrostedCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -305,6 +351,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   // ---------------------------------------------------------- bottom nav
   Widget _bottomNav() {
+    final t = _t;
     final items = [
       (Icons.sports_esports_outlined, 'Play'),
       (Icons.grid_view_rounded, 'Archive'),
@@ -314,9 +361,9 @@ class _MenuScreenState extends State<MenuScreen> {
       margin: const EdgeInsets.fromLTRB(24, 4, 24, 10),
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: G.glassWhite,
+        color: t.glassFill,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: G.outlineVariant, width: 1),
+        border: Border.all(color: t.line, width: 1),
         boxShadow: G.cardShadow,
       ),
       child: Row(
@@ -334,19 +381,19 @@ class _MenuScreenState extends State<MenuScreen> {
                 children: [
                   Icon(items[i].$1,
                       size: 20,
-                      color: active ? G.ink : G.basalt),
+                      color: active ? t.ink : t.muted),
                   const SizedBox(height: 2),
                   Text(items[i].$2,
-                      style: G.labelCaps(
+                      style: t.labelCaps(
                           size: 9,
-                          color: active ? G.ink : G.basalt)),
+                          color: active ? t.ink : t.muted)),
                   const SizedBox(height: 2),
                   Container(
                     width: 4,
                     height: 4,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: active ? G.brass : Colors.transparent,
+                      color: active ? t.accent : Colors.transparent,
                     ),
                   ),
                 ],
@@ -359,15 +406,6 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 }
 
-class _Hairline extends StatelessWidget {
-  const _Hairline();
-  @override
-  Widget build(BuildContext context) => Container(
-        height: 1,
-        color: G.outlineVariant.withValues(alpha: 0.6),
-      );
-}
-
 class _RuleBlock extends StatelessWidget {
   final String title;
   final String body;
@@ -375,76 +413,17 @@ class _RuleBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = GalleryScope.themeOf(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: G.labelCaps(size: 11, color: G.ink)),
+          Text(title, style: t.labelCaps(size: 11, color: t.ink)),
           const SizedBox(height: 6),
-          Text(body, style: G.body),
+          Text(body, style: t.body),
         ],
       ),
     );
   }
-}
-
-/// Small painted still life: matte board corner with resting discs,
-/// soft key light from the upper-left.
-class _StillLifePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Etched grid suggestion.
-    final grid = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = G.boardGrid;
-    _grid(canvas, size, grid);
-
-    // A few resting discs, arranged like a gallery still life.
-    const specs = [
-      (0.30, 0.62, 0.16, 2),
-      (0.52, 0.44, 0.19, 1),
-      (0.74, 0.60, 0.15, 2),
-      (0.44, 0.78, 0.13, 1),
-      (0.68, 0.26, 0.12, 2),
-    ];
-    for (final s in specs) {
-      final r = size.width * s.$3;
-      final c = Offset(size.width * s.$1, size.height * s.$2);
-      final p = DiscPainter(side: s.$4);
-      canvas.save();
-      canvas.translate(c.dx - r, c.dy - r);
-      p.paint(canvas, Size(r * 2, r * 2));
-      canvas.restore();
-    }
-
-    // Soft key-light wash from upper-left.
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = const RadialGradient(
-          center: Alignment(-0.6, -0.7),
-          radius: 1.1,
-          colors: [
-            Color(0x14FFFFFF),
-            Color(0x00000000),
-          ],
-        ).createShader(Offset.zero & size),
-    );
-  }
-
-  void _grid(Canvas canvas, Size size, Paint grid) {
-    const n = 5;
-    for (var i = 0; i <= n; i++) {
-      final x = size.width * i / n;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-      final y = size.height * i / n;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }

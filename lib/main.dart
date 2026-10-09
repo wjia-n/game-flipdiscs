@@ -3,9 +3,11 @@
 /// Clean architecture:
 ///   game/engine.dart      — deterministic Reversi rules (pure Dart)
 ///   game/ai.dart          — Easy / Medium / Hard bot (RULES.md §11)
-///   game/controller.dart  — state management (ChangeNotifier)
+///   game/controller.dart  — engine-owned turn state machine + watchdog
+///   theme/gallery.dart    — theme / disc-style / board-accent catalogs
 ///   services/settings.dart — local persistence (shared_preferences)
-///   services/audio.dart    — procedural audio via audioplayers
+///   services/audio.dart    — cached procedural audio via audioplayers
+///   services/iap_service.dart — Play Billing (Pro + tip jar)
 ///   ui/*                   — gallery visual layer (Stitch design system)
 
 library;
@@ -13,17 +15,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'services/audio.dart';
+import 'services/iap_service.dart';
 import 'services/settings.dart';
-import 'ui/menu_screen.dart';
-import 'ui/tokens.dart';
+import 'ui/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations(
-      [DeviceOrientation.portraitUp]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   final settings = AppSettings();
   await settings.load();
-  await AudioService.I.init();
+  final store = StoreService();
   AudioService.I.syncSettings(
     musicOn: settings.musicOn,
     sfxOn: settings.sfxOn,
@@ -40,12 +41,14 @@ void main() async {
       sfxVolume: settings.sfxVolume,
     );
   });
-  runApp(FlipDiscsApp(settings: settings));
+  runApp(FlipDiscsApp(settings: settings, store: store));
 }
 
 class FlipDiscsApp extends StatefulWidget {
   final AppSettings settings;
-  const FlipDiscsApp({super.key, required this.settings});
+  final StoreService store;
+  const FlipDiscsApp(
+      {super.key, required this.settings, required this.store});
 
   @override
   State<FlipDiscsApp> createState() => _FlipDiscsAppState();
@@ -62,28 +65,47 @@ class _FlipDiscsAppState extends State<FlipDiscsApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.store.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Handle app lifecycle correctly: silence music off-screen.
+    // Pause (not stop) on interruption so music resumes exactly where it
+    // left off; game screens additionally freeze their turn machines.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
-      AudioService.I.pauseMusic();
+      AudioService.I.onAppPaused();
     } else if (state == AppLifecycleState.resumed) {
-      AudioService.I.resumeMusic();
+      AudioService.I.onAppResumed();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flip Discs',
-      debugShowCheckedModeBanner: false,
-      theme: G.theme,
-      home: MenuScreen(settings: widget.settings),
+    return ListenableBuilder(
+      listenable: widget.settings,
+      builder: (_, _) => MaterialApp(
+        title: 'Flip Discs',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          fontFamily: 'Manrope',
+          scaffoldBackgroundColor: widget.settings.gallery.bg,
+          colorScheme: ColorScheme.light(
+            primary: widget.settings.gallery.ink,
+            surface: widget.settings.gallery.surface,
+          ),
+          textSelectionTheme: TextSelectionThemeData(
+            cursorColor: widget.settings.gallery.ink,
+          ),
+        ),
+        home: SplashScreen(
+          settings: widget.settings,
+          store: widget.store,
+        ),
+      ),
     );
   }
 }

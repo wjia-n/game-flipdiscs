@@ -4,6 +4,13 @@
 /// board. No harsh buzzers, no fanfare; gallery-quiet.
 ///
 /// Music and SFX each have a toggle + volume, wired to [AppSettings].
+///
+/// Reliability notes (MASTER_RULES audio bar):
+/// - Clips are cached once at prewarm and reused; music track changes are
+///   serialized through a busy guard so overlapping calls can never leave
+///   the player in a half-switched state.
+/// - pause()/resume() (never stop()) on lifecycle changes, so music
+///   resumes exactly where it left off and never silently dies.
 
 library;
 import 'dart:async';
@@ -16,8 +23,8 @@ class AudioService {
   static final AudioService I = AudioService._();
 
   final AudioPlayer _music = AudioPlayer();
-  final List<AudioPlayer> _sfxPool =
-      List.generate(4, (_) => AudioPlayer(playerId: 'sfx'));
+  // Distinct players (unique ids) so staggered sounds overlap properly.
+  final List<AudioPlayer> _sfxPool = List.generate(4, (_) => AudioPlayer());
   int _sfxCursor = 0;
 
   bool _ready = false;
@@ -27,6 +34,10 @@ class AudioService {
   double musicVolume = 0.7;
   double sfxVolume = 0.8;
   String? _currentTrack;
+
+  /// Serializes music operations: a busy guard so concurrent play/stop
+  /// calls can never interleave into a silent/dead player.
+  Future<void> _musicOp = Future.value();
 
   static const _sfxAssets = [
     'click',
@@ -39,21 +50,24 @@ class AudioService {
     'lose',
   ];
 
-  /// Call once at app start. Safe to call twice.
+  /// Call once at app start (or from the splash). Safe to call twice.
   Future<void> init() async {
     if (_ready) return;
     _ready = true;
     await _music.setReleaseMode(ReleaseMode.loop);
-    // Warm the SFX players so first taps have no latency.
     for (final p in _sfxPool) {
       await p.setReleaseMode(ReleaseMode.stop);
     }
+    // Cache every clip up front so first taps have no latency.
     for (final name in _sfxAssets) {
       AudioCache.instance.load('audio/$name.wav');
     }
     AudioCache.instance.load('audio/menu_music.wav');
     AudioCache.instance.load('audio/game_music.wav');
   }
+
+  /// Splash-time prewarm: init + (optionally) start the menu track early.
+  Future<void> prewarm() => init();
 
   void syncSettings(
       {required bool musicOn,
@@ -112,19 +126,28 @@ class AudioService {
   Future<void> win() => _sfx('win');
   Future<void> lose() => _sfx('lose');
 
-  Future<void> _playTrack(String name) async {
+  /// Queued behind any in-flight music op (busy guard).
+  Future<void> _playTrack(String name) {
+    _musicOp = _musicOp.then((_) => _doPlayTrack(name)).catchError((_) {});
+    return _musicOp;
+  }
+
+  Future<void> _doPlayTrack(String name) async {
     if (!_ready) return;
     try {
       if (_currentTrack == name) {
         if (musicOn) await _music.resume();
         return;
       }
-      _currentTrack = name;
       await _music.stop();
+      _currentTrack = name;
       await _music.setVolume(musicOn ? musicVolume : 0.0);
       await _music.setSource(AssetSource('audio/$name.wav'));
       if (musicOn) await _music.resume();
-    } catch (_) {}
+    } catch (_) {
+      // Never leave the service wedged: a failed switch keeps the old
+      // track name so a retry simply replays it.
+    }
   }
 
   Future<void> menuMusic() => _playTrack('menu_music');
@@ -144,16 +167,26 @@ class AudioService {
     }
   }
 
+  /// App lifecycle: pause (not stop) on interruption so music resumes
+  /// exactly where it left off.
+  void onAppPaused() => pauseMusic();
+  void onAppResumed() => resumeMusic();
+
   /// Physical tap feedback, honoring the haptics toggle.
+  /// Never throws — platform errors become silent no-ops (this also keeps
+  /// unit tests without a platform binding green).
   void tapHaptic() {
-    if (hapticsOn) HapticFeedback.selectionClick();
+    if (!hapticsOn) return;
+    HapticFeedback.selectionClick().catchError((_) {});
   }
 
   void moveHaptic() {
-    if (hapticsOn) HapticFeedback.mediumImpact();
+    if (!hapticsOn) return;
+    HapticFeedback.mediumImpact().catchError((_) {});
   }
 
   void invalidHaptic() {
-    if (hapticsOn) HapticFeedback.lightImpact();
+    if (!hapticsOn) return;
+    HapticFeedback.lightImpact().catchError((_) {});
   }
 }

@@ -285,4 +285,73 @@ void main() {
           chooseBotMove(e, black, BotDifficulty.hard, seed: 7), sq('a', 8));
     });
   });
+
+  group('§13.7 full board ends immediately', () {
+    test('filling the last square ends the game at once', () {
+      final e = ReversiEngine();
+      e.board = List.filled(64, black);
+      e.board[0] = empty;
+      e.board[1] = white;
+      e.sideToMove = black;
+      expect(e.legalMoves(black), contains(0));
+      final outcome = e.play(0);
+      expect(outcome, isNotNull);
+      expect(outcome!.flips, [1]);
+      expect(outcome.gameOver, isTrue);
+      expect(e.emptyCount, 0);
+      expect(e.result.winner, black);
+    });
+  });
+
+  group('no stuck states: bot-vs-bot simulation', () {
+    test('easy/medium vs themselves always terminate legally', () {
+      for (final diff in [BotDifficulty.easy, BotDifficulty.medium]) {
+        for (var seed = 0; seed < 4; seed++) {
+          final e = ReversiEngine();
+          var guard = 0;
+          while (!e.isGameOver && guard < 200) {
+            final side = e.sideToMove;
+            final moves = e.legalMoves();
+            // The side to move ALWAYS has a move unless the game is over:
+            // forced passes are applied inside play().
+            expect(moves, isNotEmpty,
+                reason: 'stuck state: side $side to move, seed $seed');
+            final m = chooseBotMove(e, side, diff,
+                seed: seed * 100003 + guard * 101);
+            expect(moves.contains(m), isTrue,
+                reason: '$diff played illegal $m');
+            final outcome = e.play(m);
+            expect(outcome, isNotNull);
+            // Score invariant after every single move.
+            final b = e.countOf(black), w = e.countOf(white);
+            expect(b + w + e.emptyCount, 64);
+            guard++;
+          }
+          expect(e.isGameOver, isTrue);
+          expect(guard, lessThan(200));
+          // The game ended either on a full board or by consecutive passes.
+          final r = e.result;
+          expect(r.winner, inInclusiveRange(0, 2));
+        }
+      }
+    });
+
+    test('hard stays legal for a scripted mid-game stretch', () {
+      final e = ReversiEngine();
+      // Scripted opening: d3, c3, c4, e3 (all legal).
+      for (final s in ['d3', 'c3', 'c4', 'e3']) {
+        expect(e.play(sq(s.substring(0, 1), int.parse(s.substring(1)))),
+            isNotNull);
+      }
+      for (var n = 0; n < 12; n++) {
+        if (e.isGameOver) break;
+        final side = e.sideToMove;
+        final moves = e.legalMoves();
+        expect(moves, isNotEmpty);
+        final m = chooseBotMove(e, side, BotDifficulty.hard, seed: 99 + n);
+        expect(moves.contains(m), isTrue);
+        expect(e.play(m), isNotNull);
+      }
+    });
+  });
 }
