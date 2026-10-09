@@ -1,25 +1,89 @@
+/// Flip Discs — a gallery-minimalist Reversi game.
+///
+/// Clean architecture:
+///   game/engine.dart      — deterministic Reversi rules (pure Dart)
+///   game/ai.dart          — Easy / Medium / Hard bot (RULES.md §11)
+///   game/controller.dart  — state management (ChangeNotifier)
+///   services/settings.dart — local persistence (shared_preferences)
+///   services/audio.dart    — procedural audio via audioplayers
+///   ui/*                   — gallery visual layer (Stitch design system)
+
+library;
 import 'package:flutter/material.dart';
-import 'package:wajiha_game_core/wajiha_game_core.dart';
-import 'game_screen.dart';
+import 'package:flutter/services.dart';
 
-void main() => runApp(const FlipDiscsApp());
+import 'services/audio.dart';
+import 'services/settings.dart';
+import 'ui/menu_screen.dart';
+import 'ui/tokens.dart';
 
-class FlipDiscsApp extends StatelessWidget {
-  const FlipDiscsApp({super.key});
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations(
+      [DeviceOrientation.portraitUp]);
+  final settings = AppSettings();
+  await settings.load();
+  await AudioService.I.init();
+  AudioService.I.syncSettings(
+    musicOn: settings.musicOn,
+    sfxOn: settings.sfxOn,
+    hapticsOn: settings.hapticsOn,
+    musicVolume: settings.musicVolume,
+    sfxVolume: settings.sfxVolume,
+  );
+  settings.addListener(() {
+    AudioService.I.syncSettings(
+      musicOn: settings.musicOn,
+      sfxOn: settings.sfxOn,
+      hapticsOn: settings.hapticsOn,
+      musicVolume: settings.musicVolume,
+      sfxVolume: settings.sfxVolume,
+    );
+  });
+  runApp(FlipDiscsApp(settings: settings));
+}
+
+class FlipDiscsApp extends StatefulWidget {
+  final AppSettings settings;
+  const FlipDiscsApp({super.key, required this.settings});
+
+  @override
+  State<FlipDiscsApp> createState() => _FlipDiscsAppState();
+}
+
+class _FlipDiscsAppState extends State<FlipDiscsApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Handle app lifecycle correctly: silence music off-screen.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      AudioService.I.pauseMusic();
+    } else if (state == AppLifecycleState.resumed) {
+      AudioService.I.resumeMusic();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GameShell(
-      variant: ShellVariant.playfulPop,
+    return MaterialApp(
       title: 'Flip Discs',
-      tagline: 'Outflank and flip your rival\'s discs on the 8x8 board!',
-      emoji: '🔄',
-      slug: 'flipdiscs',
-      howToPlay:
-          '• Black moves first. Tap a glowing dot to place your disc.\n• You must trap a line of rival discs between yours — every trapped disc flips to your color!\n• No legal moves? You pass automatically. Brutal.\n• When the board is full (or nobody can move), most discs wins. Corners are gold. 🏆',
-      playerOptions: const [1, 2],
-      supportsBots: true,
-      gameBuilder: (ctx, players, cb) => FlipDiscsScreen(players: players, callbacks: cb),
+      debugShowCheckedModeBanner: false,
+      theme: G.theme,
+      home: MenuScreen(settings: widget.settings),
     );
   }
 }
